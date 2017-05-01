@@ -1,0 +1,232 @@
+---
+title: "Exercise 1"
+author: "Sergi Vilardell"
+subtitle: Mathematics for Big Data
+output:
+  
+  html_document: 
+    highlights: pygments
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+# Introduction
+
+In this exercise we will work out the basics of linear regression data simulation and graphics. These are the libraries that we are going to use:
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+library(mnormt)
+library(tidyverse)
+library(rgl)
+```
+`tidyverse` is a library that contains a bunch of libraries for data manipulation and visualization. Here will be mostly used for the package `ggplot2` .
+
+\newpage
+
+# Part 1: Data Generation
+
+We start by initialising the variables $\mu_{1}$ and $\Sigma_{1}$ as follows:
+```{r}
+mu_1 <- c(3, 1, 13)
+sigma_1 <- matrix(c(5, 1.574, -3.352, 1.574, 2, 1.241,-3.352, 1.241, 6),nrow = 3,ncol = 3)
+```
+
+These are used to generate a multivariate Gaussian random sample that we will use as a dataframe.
+
+```{r}
+#Data set 1
+data_1 <- rmnorm(n = 10^3, mu_1, sigma_1)
+data_1 <- as.data.frame(data_1)
+group<- rep(1, 10^3)
+data_1$group <- group
+colnames(data_1) <- c("X1", "X2", "X3", "G")
+```
+The new data sample is in `data_1` and it contains 4 columns, with the 4th being a column of 1s to indicate that it belongs to `data_1`. Now repeat the process for another  $\mu_{2}$ and $\Sigma_{2}$:
+
+```{r}
+mu_2 <- c(7, -2, 10)
+sigma_2 <- matrix(c(3, -1.385, 2.939, -1.385, 1, -1.979, 2.939, -1.979, 8),nrow = 3,ncol = 3)
+
+#Data set 2
+data_2 <- rmnorm(n=10^3, mu_2, sigma_2)
+data_2 <- as.data.frame(data_2)
+group<- rep(2,10^3)
+data_2$group <- group
+colnames(data_2) <- c("X1", "X2", "X3", "G")
+```
+
+Finally we merge the two datasets into one named `data`:
+
+```{r}
+#Merge the datasets
+data <- rbind(data_1, data_2)
+colnames(data) <- c("X1", "X2", "X3", "G")
+```
+
+\newpage
+
+# Part 2: Linear Regression
+
+We will carry out a simple linear regression model using the function `lm()` with the dataset `data_1`:
+
+```{r}
+#Linear regression data1
+mod0 <- lm(X3~X1, data = data_1)
+```
+We find that `ggplot` is a better tool to make plots, therefore we use it instead of `plot()` to make a graph of the variables involved in the linear model including $R^{2}$. Before plotting we create a function that writes the equation predicted by the model and $R^{2}$. It is a function that takes the parameters created by `lm()` and displays them in text:
+
+```{r}
+#Function to display lm() variables
+lm_eqn = function(m) {
+  
+  l <- list(a = format(coef(m)[1], digits = 4),
+            b = format(abs(coef(m)[2]), digits = 2),
+            r2 = format(summary(m)$r.squared, digits = 3));
+  
+  if (coef(m)[2] >= 0)  {
+    eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(R)^2~"="~r2,l)
+  } else {
+    eq <- substitute(italic(y) == a - b %.% italic(x)*","~~italic(R)^2~"="~r2,l)    
+  }
+  
+  as.character(as.expression(eq));                 
+}
+```
+
+Now we can make the plot:
+
+```{r, fig.height=3.3}
+#Plot
+ggplot(data = data_1, aes(x = X1, y = X3)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)+
+  geom_text(aes(x = 7.5, y = 20, label = lm_eqn(mod0)), parse = TRUE)
+```
+
+Read the summary of `mod0`:
+
+```{r}
+sum.mod <- summary(mod0)
+sum.mod
+```
+
+We show also the residual plots for `mod0`:
+
+
+```{r, fig.height=4}
+#Residual plots
+plot(mod0,1:6)
+```
+
+This plots are very useful to get information about the model. For instance the Residuals vs Fitted values; the plot is generated with the Residuals($e_{i} = y_{i}-\hat{y_{i}}$), where $y_{i}$ is the response and $\hat{y_{i}}$ are the predicted values for the response. In order to see the trend of the Residuals a fit is generated. In this case the it is a straight line, suggesting that the response and the input values have a linear dependency. This can also be seen in the Normal Q-Q; this is used to determine if the relationship between the input and the response is linear. As the plot generates a straight line we can conlcude that it is a linear dependency, although there are values that do no fit very well into this argument. In both plots there are some points marked with their index number in the dataframe, these are outliers. Outliers can be better identified computing the Cook's distance. One of the plots uses this to help us visualize the points that have negative influence when generating our model, i.e. the points that are worth eliminating to improve the model. In our case, instances 293, 593 and 767 are marked as outliers as they have the biggest Cook's distance.
+
+Now let us display the confidence and prediction bands in the simple linear regression model. We use the code provided by the teacher adapted to our code:
+
+```{r, message=FALSE, warning=FALSE}
+# confidence band
+conf.band<-predict(mod0 ,interval="confidence")
+head(conf.band) 
+# prediction, lower and upper bounds
+# prediction band
+pred.band<-predict(mod0,interval="prediction")
+yban<-data.frame(conf.band,pred.band[,-1]) 
+# the first column was repeated
+
+matplot(data_1$X1, yban, ylim = c(min(yban), max(yban)),
+        lty = c(1,1,1,2,2), col=c(1,2,2,4,4), type = "l",
+        ylab = "ylab",xlab="xlab",
+        main ="confidence bands (red) and prediction bands (blue)", 
+        cex.main = .8)
+points(data_1$X1, data_1$X3, pch = 20, cex = .8)
+```
+
+\newpage
+
+# Part 3: Multiple Linear Model
+
+It is also really simple to perform a multiple linear model with the function `lm()`:
+```{r}
+#Multiple linear model
+mod1 <- lm(X3~X1+X2, data = data_1)
+```
+
+The summary for the linear model:
+
+```{r}
+#Summary
+summary(mod1)
+```
+When performing a linear model first and foremost we have to look at the t-value and p-values. Higher absolute t-values allow us to reject the null hypothesis. Lower p-values tell us how trustworthy are the results that we get. In this case the t-values allow us to reject the null hypothesis, and the p-values indicate that this assumption can be made safely. The ajusted $R^{2}$ is close to one $R^{2}\approx 0.96$, therefore the model fits the data well.
+
+The residual plots for this model are:
+
+```{r,fig.height=4}
+#Residual plots 
+plot(mod1, 1:6)
+```
+The residuals plots are very similar to the simple linear model. The Residuals vs Fitted values as well as the Normal Q-Q plot show us a linear dependency on the predictors. 
+
+As a last exercise we will predict a new observation using this model:
+
+```{r}
+input <- data.frame(X1 = 2, X2 = 0)
+predict.lm(mod1, input, interval = "confidence")
+
+```
+
+```{r}
+predict.lm(mod1, input, interval = "prediction")
+```
+
+\newpage
+
+#Part 4: More Graphics
+
+It is interesting to draw a scatterplot of each variable against each other in the dataframe `data`:
+
+```{r}
+plot(data,col = c("red","blue")[data$G])
+```
+
+In each plot the difference between the two groups is that they always have different signs in the slope, in case we performed a linear model. We can separate the two groups into different plots using `coplot()` to compare them:
+
+```{r}
+#Coplot
+coplot(X3~X1|as.factor(G), data)
+```
+
+However we found that a neater display is given using `ggplot`:
+```{r, fig.height=3, message=FALSE, warning=TRUE}
+#ggplot
+ggplot(data, aes(x = X1, y = X3)) + 
+  geom_point(aes(colour = G), alpha = 0.4, show.legend = FALSE) + 
+  facet_wrap(~ G)
+```
+
+Finally we make a 3D plot displaying all three variables:
+```{r, rgl = TRUE}
+plot3d(data,col = c("red", "blue")[data$G])
+rgl.postscript("dplot.pdf", "pdf")
+```
+\begin{center}
+\includegraphics[width=8in]{dplot.pdf} 
+\end{center}
+
+The last exercise could not be performed because of problems with the necessary packages that include the functions that have to be used.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

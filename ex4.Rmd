@@ -1,0 +1,80 @@
+---
+title: 'Assignment 4: Factor Analysis'
+author: "Sergi Vilardell"
+subtitle: Mathematics for Big Data
+output:
+  pdf_document: null
+  html_document:
+    highlights: pygments
+    toc: yes
+---
+
+```{r}
+library(psych)
+library(datasets)
+library(tidyverse)
+```
+
+
+# Maximum Likelihood method (MLE) in FA
+
+MLE method to estimate the parameters $Q$ and $\Psi$ can be performed using function `factanal()`.
+
+1.-Get the two-factor solution with the following options: `varimax rotation` and scores obtained
+by the `regression` method. Save it in an object `ml.vx.reg2`.
+
+(a) Obtain the loadings matrix (the complete one) and save it in object `Q`.
+
+```{r}
+#FA
+data(LifeCycleSavings, package = "datasets")
+data <- LifeCycleSavings
+dat <- data.frame(data[, 1:4], logddpi = log(data$ddpi)) ## we use log(ddpi)
+names(dat)<-c("sr","p15","p75","dpi","ldd") ## shorter names
+head(dat,3)
+fa.nr<-factanal(dat,factors=2,rotation="none",scores="regression")
+fa.vx<-factanal(dat,factors=2,rotation="varimax",scores="regression")
+
+```
+
+```{r}
+#Loadings matrix
+Q <- fa.vx$loadings[,1:2]
+Q.2 <- Q^2
+hi2 <- data.frame(rowSums(Q.2))
+colnames(hi2) <- "comm"
+psi <- data.frame(apply(hi2,1, FUN = function(x) 1-x))
+colnames(psi) <- "spec"
+```
+
+
+```{r}
+#Scores matrix
+F <- fa.vx$scores[,1:2]
+
+#Biplot
+
+biplot(Q,F)
+
+```
+
+```{r}
+#New 2-factor promax
+
+ml.px.reg2 <- factanal(dat,factors=2,rotation="promax",scores="regression")
+
+Q.p <- ml.px.reg2$loadings[,1:2]
+F.p <- ml.px.reg2$scores[,1:2]
+biplot(Q,F)
+```
+
+
+#Principal Axes Factorial method (PAF) in FA
+
+Apply PAF and MLE estimation methods, both with 4 factors and varimax rotation, to the $drug usage data$ using the function `fa()`. Compare the results provided by MLE and PAF.
+
+```{r}
+PAF <-  fa(druguse.cor, nfactors = 4, rotate = "varimax",fm = "pa")
+MLE <-  fa(druguse.cor, nfactors = 4, rotate = "varimax",fm = "mle")
+```
+

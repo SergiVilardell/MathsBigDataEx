@@ -1,0 +1,13 @@
+---
+title: "Assignment 3"
+subtitle: "Principal Components"
+author: "Sergi Vilardell"
+subtitle: Mathematics for Big Data
+output:
+  html_document:
+    highlights: pygments
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+

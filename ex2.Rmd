@@ -1,0 +1,267 @@
+---
+title: "Assignment 2"
+author: "Sergi Vilardell"
+subtitle: Mathematics for Big Data
+output:
+  html_document:
+    highlights: pygments
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(mnormt)
+library(fBasics)
+```
+
+These exercises cover matrix decompositions: SD and SVD.
+
+## Exercise 2.1
+
+Generate a multivariate Gaussian sample, `data`, of size $10^{4}$:
+
+```{r}
+#Mean
+mu <- c(5, 1, -1, -4)
+
+#Covariance
+sigma <- matrix(c(3,  1.385, -2.939, 0, 
+              1.385,      1, -1.979, 0, 
+             -2.939, -1.979,      8, 0,      
+                  0,      0,      0, 8),nrow = 4,ncol = 4)
+
+#Data
+set.seed(137)
+data <- rmnorm(n=10^4,mu, sigma)
+data <- as.matrix(data)
+
+```
+
+## Exercise 2.2
+
+Get the sample mean vector of the generated data:
+
+```{r}
+#Mean
+m <- apply(data, 2, mean)
+m
+mu
+
+#Covariance
+S <- cov(data)
+S
+sigma
+```
+
+The results are as expected, the data is large enough to produce the expected mean and covariance but not large enough to be almost equal.
+
+## Exercise 2.3
+
+Obtain the dimension and the rank of the file `data`, and the same for matrix $S$ ( use functions `dim()` and `rk()`)
+
+```{r}
+#Dimension
+dim(data)
+dim(S)
+#Rank
+rk(data)
+rk(S)
+
+```
+
+
+## Exercise 2.4
+
+Now we center the data. The centering is done by substracting the mean of each column in their corresponding rows:
+
+```{r}
+#Center the data
+X <- sweep(data, 2, m, "-")
+X <- as.matrix(X)
+head(X)
+tail(X)
+rk(X)
+```
+
+
+## Exercise 2.5
+
+Check the equality $S =\frac{1}{n-1}X^{t}X$:
+
+```{r}
+X.t <- t(X)
+c <- 1/(10^4-1)
+S.new <- c*X.t%*%X
+```
+
+Compare objects with `all.equal()`, which compare `R` objects and test 'near equality'
+
+```{r}
+all.equal(S, S.new)
+```
+
+
+## Exercise 2.6
+Spectral decomposition of $A = S\times(n-1)$, where $S$ is the sample covariance matrix:
+
+```{r}
+A <- as.matrix(S.new/c)
+sd.A <- eigen(A)
+diag(sd.A$values)
+sd.A$vectors
+```
+
+a) Compare the **SD** of $A$ with the **SD** of $S$:
+```{r}
+sd.S <- eigen(S)
+sd.S
+all.equal(sd.S, sd.A)
+```
+
+The eigenvectors are the same and the difference between the two **SD** is in the eigenvalues, but the are proportional between them, this is because the factor $1/(n-1)$ that is present in the **SD** of $S$.
+
+b) Check the ortogonality of $V$:
+
+```{r}
+V <- as.matrix(sd.A$vectors)
+V.t <- t(V)
+I <- diag(4)
+all.equal(I, V.t%*%V)
+all.equal(I, V%*%V.t)
+```
+
+The orthogonality is satisfied as expected.
+
+c) Check the Jordan theorem equality (**SD**): $A = V\Lambda V^{t}$:
+```{r}
+
+D <- diag(sd.A$values)
+A.new <- V%*%D%*%V.t
+all.equal(A, A.new)
+```
+
+The Jordan Theorem equality is satisfied as expected.
+
+d) Compute the matrix $Q$ that factorizes $A$ and check the factorization property. $Q$ is defined as $Q := V\Lambda^{1/2}$:
+```{r}
+#Factorization
+sqrt.D <- diag(sqrt(sd.A$values))
+Q <- V%*%sqrt.D
+Q
+Q.t <- t(Q)
+all.equal(A,Q%*%Q.t)
+```
+
+The factorization property is satisfied.
+
+e) Compare all the possible rank-2 approximations to $A$. We can see that the next operation is equal to $A$:
+
+```{r}
+test <- cbind(Q[,1])%*%t(Q[,1])+
+        cbind(Q[,2])%*%t(Q[,2])+
+        cbind(Q[,3])%*%t(Q[,3])+
+        cbind(Q[,4])%*%t(Q[,4])
+
+all.equal(A, test)
+```
+
+We take just two elements from that sum to make a rank-2 approximation, and see which is the best using the norm $(\sum_{i,j}(a_{ij}-a^{su}_{ij})^{2})^{1/2}$. First we create the function that computes the norm:
+
+```{r}
+#Norm function
+norm.matrix <- function(a,b){
+  c <- a-b
+  c <- c*c
+  norm <- sum(c)
+  norm <- sqrt(norm)
+  return(norm)
+}
+```
+
+Make another function that computes the new matrix $A$ given the two indexs for the columns:
+
+```{r}
+#Reduced matrix function
+A.reduc <- function(a,b){
+  cbind(Q[,a])%*%t(Q[,a])+cbind(Q[,b])%*%t(Q[,b])
+}
+```
+
+Now compute all the combinations for the norms. Here we use the function `combn()` which generates all the combinations of pairs of numbers between $1$ and $4$, each pair with two different numbers:
+
+```{r}
+#Rank-2 approx
+comb <- combn(4,2)
+norms <- rep(0,6)
+for(i in 1:6){
+  norms[i] <- norm.matrix(A.reduc(comb[1,i],comb[2,i]),A)
+}
+norms <- rbind(comb, norms)
+norms
+```
+
+The lowest norm corresponds to the reduction using the first two vector columns from $Q$, which should not be surprising, as they are the vectors for the two largest eigenvalues. We can check the rank of the matrix `A.reduc`:
+
+```{r}
+#Ranks
+rk(A.reduc(1,2))
+rk(A)
+```
+
+We succesfully reduced the rank from $4$ to $2$ of the matrix $A$.
+
+
+
+## Exercise 2.7
+
+Compute the Singular Value Decomposition (**SVD**), i.e., the matrices $U$, $D$, $V$, of the centered data $X$, using function `svd()`.
+
+```{r}
+#Singular Value Decomposition
+svd <- svd(X)
+```
+
+a) Compare $U$, $V$ and $D$ with the matrices appearing in the **SD** of $A=X^{t}X$ and $B=XX^{t}$.
+
+```{r}
+#SVD and SD comparison
+A.sd <- X.t%*%X
+B.sd <- X%*%X.t
+all.equal(A.sd, svd$v)
+all.equal(B.sd, svd$u)
+```
+
+b) Check the equality: $X = \sum d_{j}u_{j}v_{j}^{t}$.
+
+```{r}
+sum <- 0
+for (i in 1:4){
+  sum = sum + svd$d[i]*cbind(svd$u[,i])%*%t(svd$v[,i])
+}
+all.equal(sum, X)
+```
+
+c) Obtain the best rank-3 approximation to $X$, say $\tilde{X}$. Then, compute $(\sum_{i,j}(x_{ij}-\tilde{x}_{ij})^{2})^{1/2}$ and $\max_{ij}|x_{ij}-\tilde{x}_{ij}|$ to quantify the approximation error.
+
+The best rank-3 approximation will be the vectors corresponding to the 3 biggest values from the diagonal matrix $D$:
+
+```{r}
+#Rank-3 approx
+X.tilde <- 0
+for (i in 1:3){
+  X.tilde = X.tilde + svd$d[i]*cbind(svd$u[,i])%*%t(svd$v[,i])
+}
+X.norm <- norm.matrix(X, X.tilde)
+X.norm
+```
+Now find $\max_{ij}|x_{ij}-\tilde{x}_{ij}|$.
+
+```{r}
+#Max value
+M <- abs(X-X.tilde)
+max(M)
+```
+
+
+
